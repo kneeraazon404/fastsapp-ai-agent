@@ -1,4 +1,4 @@
-# FastAPI + WhatsApp + AI Agent => FastsApp AI Agent
+# FastsApp AI Agent
 
 A production-grade WhatsApp customer-service bot for **Adventist Medical Centre (Hong Kong)**.
 Powered by OpenAI GPT-4o-mini, Retrieval-Augmented Generation (ChromaDB + Cohere rerank), and Twilio,
@@ -34,7 +34,7 @@ Twilio WhatsApp
 ### Module layout
 
 ```
-whatsapp-ai-chatbot/
+fastsapp-ai-agent/
 ├── main.py                       # FastAPI app + lifespan startup
 ├── pyproject.toml                # Project metadata, pinned deps, pytest config
 ├── requirements.txt              # Flat install list (mirrors pyproject.toml deps)
@@ -111,8 +111,8 @@ service type) drive a guided booking flow:
 ### 1. Clone and create a virtual environment
 
 ```bash
-git clone https://github.com/kneeraazon404/whatsapp_ai_chatbot.git
-cd whatsapp-ai-chatbot
+git clone https://github.com/kneeraazon404/fastsapp-ai-agent.git
+cd fastsapp-ai-agent
 python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 ```
@@ -142,12 +142,12 @@ Required variables:
 | `DB_USER` | PostgreSQL username |
 | `DB_PASSWORD` | PostgreSQL password |
 | `DB_HOST` | PostgreSQL host (default: `localhost`) |
-| `DB_NAME` | Database name (default: `whatsapp_ai_chatbot`) |
+| `DB_NAME` | Database name (default: `fastsapp_ai_agent`) |
 
 ### 4. Create the database
 
 ```bash
-psql -U postgres -c "CREATE DATABASE whatsapp_ai_chatbot;"
+psql -U postgres -c "CREATE DATABASE fastsapp_ai_agent;"
 ```
 
 The application creates the `conversations` table automatically at startup.

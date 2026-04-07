@@ -41,7 +41,7 @@ class Settings(BaseSettings):
     db_user: str
     db_password: str
     db_host: str = "localhost"
-    db_name: str = "whatsapp_ai_chatbot"
+    db_name: str = "fastsapp_ai_agent"
     db_port: int = 5432
 
     # ── Vectorstore ───────────────────────────────────────────────────────────
