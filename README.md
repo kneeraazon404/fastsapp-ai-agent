@@ -1,8 +1,31 @@
 # WhatsApp AI Chatbot
 
 A production-grade WhatsApp customer-service bot for **Adventist Medical Centre (Hong Kong)**.
-Powered by OpenAI GPT-4o, Retrieval-Augmented Generation (ChromaDB + Cohere rerank), and Twilio,
+Powered by OpenAI GPT-4o-mini, Retrieval-Augmented Generation (ChromaDB + Cohere rerank), and Twilio,
 with five built-in agentic intelligence features.
+
+---
+
+## Stack versions
+
+| Component | Version | Notes |
+|---|---|---|
+| Python | 3.11+ (tested on 3.14) | |
+| FastAPI | 0.135.3 | + Starlette 1.0.0 |
+| Uvicorn | 0.44.0 | |
+| OpenAI SDK | 2.30.0 | v2 client — uses `max_completion_tokens` |
+| Cohere SDK | 5.21.1 | `ClientV2`, `rerank-multilingual-v3.0` |
+| ChromaDB | 1.5.6 | `PersistentClient` |
+| SQLAlchemy | 2.0.49 | |
+| psycopg (v3) | 3.3.3 | Replaces psycopg2 — dialect: `postgresql+psycopg` |
+| Pydantic | 2.12.5 | + pydantic-settings 2.13.1 |
+| Twilio | 9.10.4 | |
+| pytest | 9.0.2 | + pytest-asyncio 1.3.0 |
+| PostgreSQL | 16 / 17 LTS recommended | Any 14+ works |
+
+> **Known version ceiling:** `chromadb 1.5.6` depends on `opentelemetry-api 1.40.0`
+> which pins `protobuf < 7` and `importlib-metadata < 8.8`. Those two packages cannot
+> be upgraded until chromadb ships an opentelemetry update.
 
 ---
 
@@ -19,7 +42,7 @@ Twilio WhatsApp
 │  2. Load per-user Conversation History ◄──── Feature 1
 │  3. Summarise long history (if needed) ◄──── Feature 3
 │  4. Query ChromaDB → Cohere rerank (RAG)    │
-│  5. Generate response (OpenAI GPT-4o)       │
+│  5. Generate response (OpenAI gpt-4o-mini)  │
 │     └─ Appointment path if intent=appt ◄──── Feature 5
 │  6. Append escalation footer (if needed) ◄── Feature 4
 │  7. Persist to PostgreSQL                   │
@@ -27,8 +50,8 @@ Twilio WhatsApp
 └─────────────────────────────────────────────┘
       │
       ▼
-  PostgreSQL (conversations table)
-  ChromaDB   (FAQ vectorstore, persistent)
+  PostgreSQL (conversations table) — via psycopg3
+  ChromaDB   (FAQ vectorstore, persistent on disk)
 ```
 
 ### Module layout
@@ -36,15 +59,17 @@ Twilio WhatsApp
 ```
 whatsapp-ai-chatbot/
 ├── main.py                       # FastAPI app + lifespan startup
+├── pyproject.toml                # Project metadata, pinned deps, pytest config
+├── requirements.txt              # Flat install list (mirrors pyproject.toml deps)
 ├── app/
 │   ├── config.py                 # Centralised pydantic-settings config
-│   ├── database.py               # SQLAlchemy engine/session factory
+│   ├── database.py               # SQLAlchemy engine/session (psycopg3 dialect)
 │   ├── models.py                 # Conversation ORM model
 │   ├── routes/
 │   │   ├── health.py             # GET /health
 │   │   └── webhook.py            # POST /message (Twilio webhook)
 │   └── services/
-│       ├── ai_service.py         # OpenAI chat completion (v1 client)
+│       ├── ai_service.py         # OpenAI v2 chat completion
 │       ├── vectorstore.py        # ChromaDB ingestion + Cohere rerank
 │       ├── conversation_store.py # Feature 1: per-user history
 │       ├── intent_classifier.py  # Feature 2: intent + sentiment
@@ -54,8 +79,7 @@ whatsapp-ai-chatbot/
 ├── content/
 │   └── adventistFAQ.csv          # Source FAQ documents for RAG
 ├── tests/                        # Full test suite (mocked, no external APIs)
-├── .env.example                  # Environment variable template
-└── requirements.txt              # Minimal, pinned dependencies
+└── .env.example                  # Environment variable template
 ```
 
 ---
@@ -80,12 +104,12 @@ as context. This keeps the prompt within token limits while preserving
 long-running conversation continuity.
 
 ### Feature 4 — Sentiment Analysis & Human Escalation
-The intent classifier also scores sentiment on a `-1.0` to `+1.0` scale.
+The intent classifier scores sentiment on a `-1.0` to `+1.0` scale.
 When the score drops below `ESCALATION_SENTIMENT_THRESHOLD` (default `-0.5`)
 or the intent is `emergency` / `urgent`, the conversation is:
 - flagged `escalated = True` in the database
 - given a human-contact footer appended to the bot's reply
-- logged as a warning for operator monitoring
+- emitted as a `WARNING` log for operator monitoring
 
 ### Feature 5 — Structured Entity Extraction & Appointment Handling
 For `appointment`-intent messages, extracted entities (name, date, time,
@@ -93,16 +117,14 @@ service type) drive a guided booking flow:
 - **All fields present** → confirmation response + next-steps instructions
 - **Fields missing** → focused follow-up question for only the missing data
 
-This replaces generic "tell me more" dead ends with a structured interaction.
-
 ---
 
 ## Prerequisites
 
 - Python 3.11+
-- PostgreSQL 14+ running locally (or remote)
+- PostgreSQL 14+ (16 or 17 LTS recommended)
 - A [Twilio](https://twilio.com) account with a WhatsApp-enabled number
-- An [OpenAI](https://platform.openai.com) API key
+- An [OpenAI](https://platform.openai.com) API key (GPT-4o-mini access)
 - A [Cohere](https://cohere.com) API key
 
 ---
@@ -160,8 +182,7 @@ uvicorn main:app --reload --port 8000
 ```
 
 On first startup the FAQ CSV is automatically ingested into the ChromaDB
-vectorstore (stored in `./vectorstore/`). Subsequent restarts skip
-re-ingestion.
+vectorstore (stored in `./vectorstore/`). Subsequent restarts skip re-ingestion.
 
 ### 6. Expose via ngrok (development)
 
@@ -182,7 +203,7 @@ All settings have sensible defaults. Override any of them in `.env`:
 |---|---|---|
 | `OPENAI_MODEL` | `gpt-4o-mini` | Chat model |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model |
-| `MAX_TOKENS` | `512` | Max reply tokens |
+| `MAX_COMPLETION_TOKENS` | `512` | Max reply tokens (openai v2 param) |
 | `TEMPERATURE` | `0.7` | Response creativity |
 | `COHERE_RERANK_MODEL` | `rerank-multilingual-v3.0` | Cohere rerank model |
 | `COHERE_RERANK_TOP_N` | `3` | Documents kept after rerank |
@@ -204,9 +225,13 @@ pytest tests/ -v
 ```
 
 The test suite requires **no external services** — all API calls are mocked.
+`pyproject.toml` configures pytest to treat any `DeprecationWarning` or
+`PendingDeprecationWarning` in project code as a hard error, with a targeted
+exemption for the known `asyncio.iscoroutinefunction` deprecation inside
+chromadb's telemetry internals (a third-party bug, not ours).
 
 ```
-tests/test_ai_service.py          - OpenAI response generation
+tests/test_ai_service.py          - OpenAI v2 response generation
 tests/test_conversation_store.py  - Per-user history (Feature 1)
 tests/test_intent_classifier.py   - Intent + sentiment (Feature 2)
 tests/test_summarizer.py          - History summarisation (Feature 3)
@@ -227,9 +252,30 @@ tests/test_webhook.py             - Full webhook pipeline
 
 ---
 
+## Notable upgrade decisions
+
+**psycopg2 → psycopg3 (`psycopg[binary]`)**
+psycopg2 is in maintenance-only mode. psycopg3 is the actively developed
+successor with native binary protocol, Python 3.12+ improvements, and
+async-ready design. SQLAlchemy 2.x supports it via the `postgresql+psycopg`
+dialect string in `app/database.py`.
+
+**openai SDK 1.x → 2.x**
+The v2 client deprecates `max_tokens` in favour of `max_completion_tokens`.
+All four service files that call the completions API were updated accordingly.
+The chat completion interface (`client.chat.completions.create()`,
+`response.choices[0].message.content`) is otherwise unchanged.
+
+**`pyproject.toml` added**
+Replaces ad-hoc pytest configuration. Contains pinned dependency versions,
+`asyncio_mode = "strict"`, and the `filterwarnings` rules that enforce zero
+deprecations in project code while tolerating the chromadb telemetry issue.
+
+---
+
 ## Production deployment
 
-1. Use a managed PostgreSQL service (e.g. RDS, Supabase, Neon).
+1. Use a managed PostgreSQL 16/17 service (e.g. RDS, Supabase, Neon).
 2. Mount a persistent volume for `VECTORSTORE_PATH` so embeddings survive restarts.
 3. Set all secrets via your hosting platform's secret manager (never commit `.env`).
 4. Run behind a reverse proxy (nginx, Caddy) with TLS.
