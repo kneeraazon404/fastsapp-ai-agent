@@ -1,8 +1,8 @@
 # FastsApp AI Agent
 
 A production-grade WhatsApp customer-service bot for **Adventist Medical Centre (Hong Kong)**.
-Powered by OpenAI GPT-4o-mini, Retrieval-Augmented Generation (ChromaDB + Cohere rerank), and Twilio,
-with five built-in agentic intelligence features.
+Powered by **OpenAI**, **Cohere Rerank**, **ChromaDB**, **PostgreSQL**, and **Twilio WhatsApp**,
+with five built-in agentic features.
 
 ---
 
@@ -18,8 +18,8 @@ Twilio WhatsApp
 │  1. Intent + Sentiment Classification  ◄──── Feature 2
 │  2. Load per-user Conversation History ◄──── Feature 1
 │  3. Summarise long history (if needed) ◄──── Feature 3
-│  4. Query ChromaDB → Cohere rerank (RAG)    │
-│  5. Generate response (OpenAI gpt-4o-mini)  │
+│  4. Query ChromaDB → Cohere Rerank v4       │
+│  5. Generate response via OpenAI            │
 │     └─ Appointment path if intent=appt ◄──── Feature 5
 │  6. Append escalation footer (if needed) ◄── Feature 4
 │  7. Persist to PostgreSQL                   │
@@ -27,8 +27,8 @@ Twilio WhatsApp
 └─────────────────────────────────────────────┘
       │
       ▼
-  PostgreSQL (conversations table) — via psycopg3
-  ChromaDB   (FAQ vectorstore, persistent on disk)
+  PostgreSQL (conversations table)
+  ChromaDB   (persistent FAQ vectorstore)
 ```
 
 ### Module layout
@@ -37,25 +37,25 @@ Twilio WhatsApp
 fastsapp-ai-agent/
 ├── main.py                       # FastAPI app + lifespan startup
 ├── pyproject.toml                # Project metadata, pinned deps, pytest config
-├── requirements.txt              # Flat install list (mirrors pyproject.toml deps)
+├── requirements.txt              # Flat install list
 ├── app/
-│   ├── config.py                 # Centralised pydantic-settings config
+│   ├── config.py                 # pydantic-settings centralised config
 │   ├── database.py               # SQLAlchemy engine/session (psycopg3 dialect)
 │   ├── models.py                 # Conversation ORM model
 │   ├── routes/
 │   │   ├── health.py             # GET /health
-│   │   └── webhook.py            # POST /message (Twilio webhook)
+│   │   └── webhook.py            # POST /message
 │   └── services/
-│       ├── ai_service.py         # OpenAI v2 chat completion
-│       ├── vectorstore.py        # ChromaDB ingestion + Cohere rerank
-│       ├── conversation_store.py # Feature 1: per-user history
-│       ├── intent_classifier.py  # Feature 2: intent + sentiment
-│       ├── summarizer.py         # Feature 3: long-context summarisation
-│       ├── sentiment_analyzer.py # Feature 4: escalation handling
-│       └── entity_extractor.py   # Feature 5: appointment entity flow
+│       ├── ai_service.py         # OpenAI chat completion
+│       ├── vectorstore.py        # ChromaDB + Cohere rerank
+│       ├── conversation_store.py # Feature 1 — per-user history
+│       ├── intent_classifier.py  # Feature 2 — intent + sentiment
+│       ├── summarizer.py         # Feature 3 — history summarisation
+│       ├── sentiment_analyzer.py # Feature 4 — escalation
+│       └── entity_extractor.py   # Feature 5 — appointment entity flow
 ├── content/
-│   └── adventistFAQ.csv          # Source FAQ documents for RAG
-├── tests/                        # Full test suite (mocked, no external APIs)
+│   └── adventistFAQ.csv          # FAQ source data for RAG ingestion
+├── tests/                        # Full mocked test suite (41 tests)
 └── .env.example                  # Environment variable template
 ```
 
@@ -63,46 +63,35 @@ fastsapp-ai-agent/
 
 ## Five Agentic Features
 
-### Feature 1 — Per-user Conversation Memory
-Every exchange is stored in PostgreSQL keyed by the user's WhatsApp number.
-The most-recent N turns are retrieved and included in each OpenAI prompt,
-enabling genuine multi-turn contextual conversations.
+| # | Feature | Description |
+|---|---|---|
+| 1 | **Per-user Memory** | Every exchange stored in PostgreSQL; latest N turns injected into each prompt |
+| 2 | **Intent Classification** | Single OpenAI call classifies intent (`faq`, `appointment`, `complaint`, `emergency`, `greeting`, `farewell`, `other`) + sentiment score |
+| 3 | **Conversation Summarisation** | Older turns condensed into a compact context block when history exceeds threshold |
+| 4 | **Sentiment Escalation** | Negative/urgent conversations flagged in DB, given a human-contact footer, and `WARNING`-logged |
+| 5 | **Appointment Entity Flow** | Guided booking: confirms when all fields are present, asks for missing ones otherwise |
 
-### Feature 2 — Intent Classification & Routing
-Before generating a reply, a fast `gpt-4o-mini` call classifies each
-message into one of: `faq`, `appointment`, `complaint`, `emergency`,
-`greeting`, `farewell`, `other`. The intent steers the response path
-(e.g. appointment → entity extractor) and is stored for analytics.
+---
 
-### Feature 3 — Conversation Summarisation
-When a user's history exceeds `SUMMARIZE_THRESHOLD` message pairs, older
-turns are automatically summarised into a compact paragraph and prepended
-as context. This keeps the prompt within token limits while preserving
-long-running conversation continuity.
+## Stack baseline
 
-### Feature 4 — Sentiment Analysis & Human Escalation
-The intent classifier scores sentiment on a `-1.0` to `+1.0` scale.
-When the score drops below `ESCALATION_SENTIMENT_THRESHOLD` (default `-0.5`)
-or the intent is `emergency` / `urgent`, the conversation is:
-- flagged `escalated = True` in the database
-- given a human-contact footer appended to the bot's reply
-- emitted as a `WARNING` log for operator monitoring
-
-### Feature 5 — Structured Entity Extraction & Appointment Handling
-For `appointment`-intent messages, extracted entities (name, date, time,
-service type) drive a guided booking flow:
-- **All fields present** → confirmation response + next-steps instructions
-- **Fields missing** → focused follow-up question for only the missing data
+| Component | Recommended | Minimum | Notes |
+|---|---|---|---|
+| Python | **3.13.12** | 3.11 | 3.14.3 is latest stable but this repo suppresses a known Chroma deprecation on 3.14; 3.13.x is the safer production target |
+| PostgreSQL | **17** | 14 | 18 is the newest major. PostgreSQL has no official "LTS" label — each major release gets 5 years of support |
+| OpenAI model | `gpt-4o-mini` | — | Still documented with 128k context / 16,384 output tokens |
+| Cohere rerank | `rerank-v4.0-fast` | — | v4.0 is the current family (32k context, 100+ languages); use `rerank-v4.0-pro` for higher-quality ranking |
+| Embedding model | `text-embedding-3-small` | — | Current small embedding model |
 
 ---
 
 ## Prerequisites
 
-- Python 3.11+
-- PostgreSQL 14+ (16 or 17 LTS recommended)
-- A [Twilio](https://twilio.com) account with a WhatsApp-enabled number
-- An [OpenAI](https://platform.openai.com) API key (GPT-4o-mini access)
-- A [Cohere](https://cohere.com) API key
+- Python 3.13.12 (recommended) or 3.11+
+- PostgreSQL 17 (recommended) or 14+
+- Twilio account — use the [WhatsApp Sandbox](https://www.twilio.com/docs/whatsapp/sandbox) for dev, a WhatsApp-enabled number for production
+- OpenAI API key (`gpt-4o-mini` access)
+- Cohere API key
 
 ---
 
@@ -113,8 +102,9 @@ service type) drive a guided booking flow:
 ```bash
 git clone https://github.com/kneeraazon404/fastsapp-ai-agent.git
 cd fastsapp-ai-agent
-python -m venv .venv
+python3.13 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install --upgrade pip
 ```
 
 ### 2. Install dependencies
@@ -127,10 +117,10 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edit .env with your actual API keys and database credentials
+# Fill in your API keys and database credentials
 ```
 
-Required variables:
+**Required variables:**
 
 | Variable | Description |
 |---|---|
@@ -138,7 +128,7 @@ Required variables:
 | `COHERE_API_KEY` | Cohere API key |
 | `TWILIO_ACCOUNT_SID` | Twilio Account SID |
 | `TWILIO_AUTH_TOKEN` | Twilio Auth Token |
-| `TWILIO_NUMBER` | Your Twilio WhatsApp number (e.g. `+14155238886`) |
+| `TWILIO_NUMBER` | WhatsApp-enabled Twilio number (e.g. `+14155238886`) |
 | `DB_USER` | PostgreSQL username |
 | `DB_PASSWORD` | PostgreSQL password |
 | `DB_HOST` | PostgreSQL host (default: `localhost`) |
@@ -150,7 +140,7 @@ Required variables:
 psql -U postgres -c "CREATE DATABASE fastsapp_ai_agent;"
 ```
 
-The application creates the `conversations` table automatically at startup.
+The `conversations` table is created automatically on first startup.
 
 ### 5. Start the server
 
@@ -158,40 +148,68 @@ The application creates the `conversations` table automatically at startup.
 uvicorn main:app --reload --port 8000
 ```
 
-On first startup the FAQ CSV is automatically ingested into the ChromaDB
-vectorstore (stored in `./vectorstore/`). Subsequent restarts skip re-ingestion.
+The FAQ CSV is ingested into ChromaDB on first startup and skipped on subsequent restarts.
 
-### 6. Expose via ngrok (development)
+### 6. Expose for local Twilio testing
 
 ```bash
 ngrok http 8000
 ```
 
-Set the generated HTTPS URL + `/message` as your Twilio WhatsApp webhook:
-`https://<ngrok-id>.ngrok.io/message`
+Set `https://<ngrok-id>.ngrok.io/message` as the Twilio WhatsApp webhook URL.
 
 ---
 
 ## Configuration reference
 
-All settings have sensible defaults. Override any of them in `.env`:
+All values have defaults. Override in `.env`:
 
 | Variable | Default | Description |
 |---|---|---|
 | `OPENAI_MODEL` | `gpt-4o-mini` | Chat model |
 | `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | Embedding model |
-| `MAX_COMPLETION_TOKENS` | `512` | Max reply tokens (openai v2 param) |
+| `MAX_COMPLETION_TOKENS` | `512` | Max reply tokens |
 | `TEMPERATURE` | `0.7` | Response creativity |
-| `COHERE_RERANK_MODEL` | `rerank-multilingual-v3.0` | Cohere rerank model |
+| `COHERE_RERANK_MODEL` | `rerank-v4.0-fast` | Rerank model (`rerank-v4.0-pro` for higher quality) |
 | `COHERE_RERANK_TOP_N` | `3` | Documents kept after rerank |
 | `VECTORSTORE_QUERY_N` | `8` | Candidate documents from ChromaDB |
 | `VECTORSTORE_PATH` | `./vectorstore` | ChromaDB persistence directory |
 | `CONTENT_CSV_PATH` | `./content/adventistFAQ.csv` | FAQ source data |
-| `MAX_HISTORY_MESSAGES` | `10` | Prior turns in each prompt |
-| `SUMMARIZE_THRESHOLD` | `8` | Pairs before summarisation triggers |
+| `MAX_HISTORY_MESSAGES` | `10` | Prior turns included in each prompt |
+| `SUMMARIZE_THRESHOLD` | `8` | Message pairs before summarisation triggers |
 | `SYSTEM_PROMPT` | (Chinese hospital persona) | Bot persona |
 | `ESCALATION_SENTIMENT_THRESHOLD` | `-0.5` | Score below which escalation fires |
 | `ESCALATION_CONTACT_PHONE` | `` | Phone to notify on escalation |
+
+---
+
+## Dependency snapshot
+
+**Runtime**
+
+| Package | Version |
+|---|---|
+| `fastapi` | 0.135.3 |
+| `uvicorn[standard]` | 0.44.0 |
+| `python-multipart` | 0.0.24 |
+| `openai` | 2.30.0 |
+| `cohere` | 5.21.1 |
+| `chromadb` | 1.5.6 |
+| `sqlalchemy` | 2.0.49 |
+| `psycopg[binary]` | 3.3.3 |
+| `pydantic` | 2.12.5 |
+| `pydantic-settings` | 2.13.1 |
+| `twilio` | 9.10.4 |
+
+**Dev / test**
+
+| Package | Version |
+|---|---|
+| `pytest` | 9.0.2 |
+| `pytest-asyncio` | 1.3.0 |
+| `httpx` | 0.28.1 |
+
+All packages are pinned to their current latest versions as of April 2026.
 
 ---
 
@@ -201,22 +219,7 @@ All settings have sensible defaults. Override any of them in `.env`:
 pytest tests/ -v
 ```
 
-The test suite requires **no external services** — all API calls are mocked.
-`pyproject.toml` configures pytest to treat any `DeprecationWarning` or
-`PendingDeprecationWarning` in project code as a hard error, with a targeted
-exemption for the known `asyncio.iscoroutinefunction` deprecation inside
-chromadb's telemetry internals (a third-party bug, not ours).
-
-```
-tests/test_ai_service.py          - OpenAI v2 response generation
-tests/test_conversation_store.py  - Per-user history (Feature 1)
-tests/test_intent_classifier.py   - Intent + sentiment (Feature 2)
-tests/test_summarizer.py          - History summarisation (Feature 3)
-tests/test_sentiment_analyzer.py  - Escalation handling (Feature 4)
-tests/test_entity_extractor.py    - Appointment entity flow (Feature 5)
-tests/test_vectorstore.py         - ChromaDB + Cohere rerank
-tests/test_webhook.py             - Full webhook pipeline
-```
+41 tests, no external services required — all API calls are mocked. Deprecation warnings in project code are treated as hard errors; a targeted suppression is in place for the known `asyncio.iscoroutinefunction` deprecation in chromadb's telemetry internals (third-party, not ours). This is the main reason **Python 3.13.x** is the recommended production target over 3.14.
 
 ---
 
@@ -224,39 +227,31 @@ tests/test_webhook.py             - Full webhook pipeline
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/health` | Returns `{"status": "ok"}` — for uptime monitoring |
-| `POST` | `/message` | Twilio webhook: `Body` + `From` form fields |
-
----
-
-## Notable upgrade decisions
-
-**psycopg2 → psycopg3 (`psycopg[binary]`)**
-psycopg2 is in maintenance-only mode. psycopg3 is the actively developed
-successor with native binary protocol, Python 3.12+ improvements, and
-async-ready design. SQLAlchemy 2.x supports it via the `postgresql+psycopg`
-dialect string in `app/database.py`.
-
-**openai SDK 1.x → 2.x**
-The v2 client deprecates `max_tokens` in favour of `max_completion_tokens`.
-All four service files that call the completions API were updated accordingly.
-The chat completion interface (`client.chat.completions.create()`,
-`response.choices[0].message.content`) is otherwise unchanged.
-
-**`pyproject.toml` added**
-Replaces ad-hoc pytest configuration. Contains pinned dependency versions,
-`asyncio_mode = "strict"`, and the `filterwarnings` rules that enforce zero
-deprecations in project code while tolerating the chromadb telemetry issue.
+| `GET` | `/health` | Returns `{"status": "ok"}` |
+| `POST` | `/message` | Twilio webhook — `Body` + `From` form fields |
 
 ---
 
 ## Production deployment
 
-1. Use a managed PostgreSQL 16/17 service (e.g. RDS, Supabase, Neon).
-2. Mount a persistent volume for `VECTORSTORE_PATH` so embeddings survive restarts.
-3. Set all secrets via your hosting platform's secret manager (never commit `.env`).
-4. Run behind a reverse proxy (nginx, Caddy) with TLS.
-5. Use `uvicorn main:app --workers 2 --host 0.0.0.0 --port 8000` for multi-worker mode.
+1. Use managed PostgreSQL 17 (e.g. Neon, Supabase, RDS).
+2. Mount persistent storage for `VECTORSTORE_PATH`.
+3. Store all secrets in your platform's secret manager — never commit `.env`.
+4. Run behind TLS (nginx, Caddy, or platform ingress).
+5. Multi-worker: `uvicorn main:app --workers 2 --host 0.0.0.0 --port 8000`
+6. Stay on Python **3.13.x** in production until you have fully validated 3.14 across the whole stack.
+
+---
+
+## Notable upgrade decisions
+
+**psycopg2 → psycopg3** — actively maintained successor with native binary protocol and Python 3.12+ improvements. SQLAlchemy 2.x supports it via the `postgresql+psycopg` dialect.
+
+**openai SDK 1.x → 2.x** — `max_tokens` replaced by `max_completion_tokens`. Chat Completions remains available; the OpenAI Responses API is the recommended path for new integrations.
+
+**rerank-multilingual-v3.0 → rerank-v4.0-fast** — Cohere v4.0 is the current rerank family: unified multilingual model (no separate variant needed), 32k context, state-of-the-art on BEIR and domain-specific retrieval including hospitality/healthcare.
+
+**PostgreSQL versioning** — PostgreSQL does not use an "LTS" label. Each major version receives 5 years of community support. PostgreSQL 17 is the recommended baseline; 18 is the newest major.
 
 ---
 

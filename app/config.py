@@ -28,7 +28,7 @@ class Settings(BaseSettings):
 
     # ── Cohere ────────────────────────────────────────────────────────────────
     cohere_api_key: str
-    cohere_rerank_model: str = "rerank-multilingual-v3.0"
+    cohere_rerank_model: str = "rerank-v4.0-fast"
     cohere_rerank_top_n: int = 3
     vectorstore_query_n: int = 8
 

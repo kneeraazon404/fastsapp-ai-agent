@@ -5,16 +5,17 @@ POST /message  ← Twilio calls this when a WhatsApp message arrives.
 
 Processing pipeline
 ───────────────────
-1. Extract sender phone number from the ``From`` form field.
-2. Classify intent + sentiment + entities (Feature 2).
-3. Load per-user conversation history (Feature 1).
-4. Summarise history if it has grown long (Feature 3).
-5. Query vectorstore for RAG context.
-6. Generate AI response (appointment path if intent == 'appointment', Feature 5).
-7. Append escalation footer if required (Feature 4).
-8. Persist exchange to the database.
-9. Persist escalation flag if triggered (Feature 4).
-10. Send reply via Twilio Messaging API.
+The sender's phone number is taken directly from the ``From`` form field.
+
+1. Classify intent + sentiment + entities (Feature 2).
+2. Load per-user conversation history (Feature 1).
+3. Summarise history if it has grown long (Feature 3).
+4. Query vectorstore for RAG context.
+5. Generate AI response (appointment path if intent == 'appointment', Feature 5).
+6. Append escalation footer if required (Feature 4).
+7. Persist exchange to the database.
+8. Persist escalation flag if triggered (Feature 4).
+9. Send reply via Twilio Messaging API.
 """
 import logging
 

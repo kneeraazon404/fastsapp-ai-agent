@@ -73,7 +73,7 @@ def generate_appointment_response(
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=settings.openai_model,
             messages=[
                 *history,
                 {"role": "user", "content": prompt},

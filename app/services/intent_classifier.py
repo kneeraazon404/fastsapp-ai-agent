@@ -73,7 +73,7 @@ def classify_message(user_message: str) -> ClassificationResult:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=settings.openai_model,
             messages=[{"role": "user", "content": prompt}],
             max_completion_tokens=200,
             temperature=0.1,

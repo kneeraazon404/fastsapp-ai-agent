@@ -15,7 +15,6 @@ so that OpenAI sees it as background knowledge rather than active dialogue.
 import logging
 
 from openai import OpenAI
-from sqlalchemy.orm import Session
 
 from app.config import get_settings
 
@@ -74,7 +73,7 @@ def _summarise(history: list[dict[str, str]]) -> str:
 
     try:
         response = client.chat.completions.create(
-            model="gpt-4o-mini",
+            model=settings.openai_model,
             messages=[{"role": "user", "content": prompt}],
             max_completion_tokens=150,
             temperature=0.3,

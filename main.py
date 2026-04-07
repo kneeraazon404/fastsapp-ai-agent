@@ -43,7 +43,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="WhatsApp AI Chatbot",
+    title="FastsApp AI Agent",
     description=(
         "An AI-powered WhatsApp customer-service bot backed by RAG, "
         "per-user conversation memory, intent routing, sentiment escalation, "

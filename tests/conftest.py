@@ -27,7 +27,7 @@ def mock_settings(monkeypatch):
         max_completion_tokens=256,
         temperature=0.7,
         cohere_api_key="test-cohere-key",
-        cohere_rerank_model="rerank-multilingual-v3.0",
+        cohere_rerank_model="rerank-v4.0-fast",
         cohere_rerank_top_n=3,
         vectorstore_query_n=8,
         twilio_account_sid="ACtest",
