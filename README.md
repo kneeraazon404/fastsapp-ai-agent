@@ -3,32 +3,7 @@
 A production-grade WhatsApp customer-service bot for **Adventist Medical Centre (Hong Kong)**.
 Powered by OpenAI GPT-4o-mini, Retrieval-Augmented Generation (ChromaDB + Cohere rerank), and Twilio,
 with five built-in agentic intelligence features.
-
 ---
-
-## Stack versions
-
-| Component | Version | Notes |
-|---|---|---|
-| Python | 3.11+ (tested on 3.14) | |
-| FastAPI | 0.135.3 | + Starlette 1.0.0 |
-| Uvicorn | 0.44.0 | |
-| OpenAI SDK | 2.30.0 | v2 client — uses `max_completion_tokens` |
-| Cohere SDK | 5.21.1 | `ClientV2`, `rerank-multilingual-v3.0` |
-| ChromaDB | 1.5.6 | `PersistentClient` |
-| SQLAlchemy | 2.0.49 | |
-| psycopg (v3) | 3.3.3 | Replaces psycopg2 — dialect: `postgresql+psycopg` |
-| Pydantic | 2.12.5 | + pydantic-settings 2.13.1 |
-| Twilio | 9.10.4 | |
-| pytest | 9.0.2 | + pytest-asyncio 1.3.0 |
-| PostgreSQL | 16 / 17 LTS recommended | Any 14+ works |
-
-> **Known version ceiling:** `chromadb 1.5.6` depends on `opentelemetry-api 1.40.0`
-> which pins `protobuf < 7` and `importlib-metadata < 8.8`. Those two packages cannot
-> be upgraded until chromadb ships an opentelemetry update.
-
----
-
 ## Architecture
 
 ```
