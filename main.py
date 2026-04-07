@@ -1,84 +1,57 @@
-# Third-party imports
+"""
+Entry point — run with:  uvicorn main:app --reload
+"""
 import logging
+from contextlib import asynccontextmanager
 
-import openai
-from decouple import config
-from fastapi import Depends, FastAPI, Form, HTTPException
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
-from twilio.rest import Client
+from fastapi import FastAPI
 
+from app.routes.health import router as health_router
+from app.routes.webhook import router as webhook_router
 
-# Internal imports
-from models import Conversation, SessionLocal
-from utils import bot_response
-
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s  %(levelname)-8s  %(name)s  %(message)s",
+)
 logger = logging.getLogger(__name__)
 
-# Initialize FastAPI app and set up OpenAI client
-app = FastAPI()
-openai.api_key = config("OPENAI_API_KEY")
-whatsapp_number = config("TO_NUMBER")
 
-client = Client(config("TWILIO_ACCOUNT_SID"), config("TWILIO_AUTH_TOKEN"))
-twilio_number = config("TWILIO_NUMBER")
-from_number = config("FROM_NUMBER")
-to_number = config("TO_NUMBER")
-
-
-# Dependency to manage database session
-def get_db():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     """
-    Yield a database session for the duration of the request. Close the session afterwards.
+    Startup: initialise the database schema and warm up the vectorstore
+    (ingests FAQ data if the collection is empty).
+    Shutdown: nothing special needed.
     """
-    db = SessionLocal()
+    logger.info("Starting up…")
     try:
-        yield db
-    finally:
-        db.close()
+        from app.database import init_db
+        init_db()
+        logger.info("Database schema ready.")
+    except Exception as exc:
+        logger.error("Database init failed: %s", exc)
 
-
-# Sending message logic through Twilio Messaging API
-def send_message(to_number, body_text):
     try:
-        message = client.messages.create(
-            from_=f"whatsapp:{twilio_number}",
-            body=body_text,
-            to=f"whatsapp:{to_number}",
-        )
-        logger.info(f"Message sent to {to_number}: {message.body}")
-    except Exception as e:
-        logger.error(f"Error sending message to {to_number}: {e}")
+        from app.services.vectorstore import get_collection
+        col = get_collection()
+        logger.info("Vectorstore ready (%d documents).", col.count())
+    except Exception as exc:
+        logger.error("Vectorstore init failed: %s", exc)
+
+    yield
+    logger.info("Shutting down.")
 
 
-@app.post("/message")
-async def reply(Body: str = Form(), db: Session = Depends(get_db)):
-    """
-    Listen for incoming messages, generate a response using OpenAI, store the conversation,
-    and send the response back via WhatsApp.
-    """
-    ai_response = bot_response(Body)
-    print(ai_response)
-    print("Now sending message")
-    # Store the conversation in the database
-    try:
-        conversation = Conversation(
-            sender=whatsapp_number, message=Body, response=ai_response
-        )
-        db.add(conversation)
-        db.commit()
-        logger.info(f"Conversation #{conversation.id} stored in database")
-    except SQLAlchemyError as e:
-        db.rollback()
-        logger.error(f"Error storing conversation in database: {e}")
-        raise HTTPException(status_code=500, detail="Error storing conversation")
+app = FastAPI(
+    title="WhatsApp AI Chatbot",
+    description=(
+        "An AI-powered WhatsApp customer-service bot backed by RAG, "
+        "per-user conversation memory, intent routing, sentiment escalation, "
+        "and structured appointment handling."
+    ),
+    version="2.0.0",
+    lifespan=lifespan,
+)
 
-    # Send the response via WhatsApp
-    try:
-        send_message(whatsapp_number, ai_response)
-    except Exception as e:
-        logger.error(f"Error sending WhatsApp message: {e}")
-        raise HTTPException(status_code=500, detail="Error sending message")
-
-    return ""
+app.include_router(health_router)
+app.include_router(webhook_router)
