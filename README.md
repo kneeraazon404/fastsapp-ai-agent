@@ -3,7 +3,9 @@
 A production-grade WhatsApp customer-service bot for **Adventist Medical Centre (Hong Kong)**.
 Powered by OpenAI GPT-4o-mini, Retrieval-Augmented Generation (ChromaDB + Cohere rerank), and Twilio,
 with five built-in agentic intelligence features.
+
 ---
+
 ## Architecture
 
 ```
