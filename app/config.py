@@ -22,7 +22,8 @@ class Settings(BaseSettings):
     openai_api_key: str
     openai_model: str = "gpt-4o-mini"
     openai_embedding_model: str = "text-embedding-3-small"
-    max_tokens: int = 512
+    # max_completion_tokens replaces the deprecated max_tokens in openai v2
+    max_completion_tokens: int = 512
     temperature: float = 0.7
 
     # ── Cohere ────────────────────────────────────────────────────────────────

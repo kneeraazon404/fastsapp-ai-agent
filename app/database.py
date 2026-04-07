@@ -1,6 +1,11 @@
 """
 Database engine and session factory.
 
+Uses psycopg (v3) as the PostgreSQL driver via the ``postgresql+psycopg``
+SQLAlchemy dialect.  psycopg3 is the actively-maintained successor to
+psycopg2 with native async support, binary protocol, and Python 3.12+
+improvements.
+
 The engine is built lazily from settings so that importing this module
 during tests does not attempt a database connection unless a session is
 actually requested.
@@ -22,7 +27,7 @@ def _get_engine() -> Engine:
     if _engine is None:
         s = get_settings()
         url = URL.create(
-            drivername="postgresql",
+            drivername="postgresql+psycopg",   # psycopg3 dialect
             username=s.db_user,
             password=s.db_password,
             host=s.db_host,

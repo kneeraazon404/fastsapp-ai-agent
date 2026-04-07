@@ -24,7 +24,7 @@ def mock_settings(monkeypatch):
         openai_api_key="test-openai-key",
         openai_model="gpt-4o-mini",
         openai_embedding_model="text-embedding-3-small",
-        max_tokens=256,
+        max_completion_tokens=256,
         temperature=0.7,
         cohere_api_key="test-cohere-key",
         cohere_rerank_model="rerank-multilingual-v3.0",

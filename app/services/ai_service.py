@@ -49,7 +49,7 @@ def generate_response(
         completion = client.chat.completions.create(
             model=settings.openai_model,
             messages=messages,
-            max_tokens=settings.max_tokens,
+            max_completion_tokens=settings.max_completion_tokens,
             temperature=settings.temperature,
         )
         return completion.choices[0].message.content.strip()

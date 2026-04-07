@@ -78,7 +78,7 @@ def generate_appointment_response(
                 *history,
                 {"role": "user", "content": prompt},
             ],
-            max_tokens=120,
+            max_completion_tokens=120,
             temperature=0.5,
         )
         return response.choices[0].message.content.strip()

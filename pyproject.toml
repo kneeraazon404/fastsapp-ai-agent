@@ -1,0 +1,63 @@
+[project]
+name = "whatsapp-ai-chatbot"
+version = "2.0.0"
+description = "AI-powered WhatsApp customer-service bot with RAG, intent routing, and agentic features"
+requires-python = ">=3.11"
+
+# ── Runtime dependencies (pinned to last-known-good versions) ─────────────────
+# Upgrade with: pip install --upgrade <package> then re-run pytest to validate.
+#
+# ⚠  chromadb 1.5.6 pins its opentelemetry transitive deps:
+#    - opentelemetry-api  1.40.0 → requires importlib-metadata <8.8 & protobuf <7
+#    - opentelemetry-proto 1.40.0 → requires protobuf <7
+#    Those ceilings (importlib-metadata, protobuf, pydantic-core) cannot be
+#    raised until chromadb ships an opentelemetry upgrade.
+dependencies = [
+    # Web
+    "fastapi==0.135.3",
+    "uvicorn[standard]==0.44.0",
+    "python-multipart==0.0.24",
+    # AI
+    "openai==2.30.0",
+    "cohere==5.21.1",
+    "chromadb==1.5.6",
+    # Database — psycopg3 (successor to psycopg2; use postgresql+psycopg dialect)
+    "sqlalchemy==2.0.49",
+    "psycopg[binary]==3.3.3",
+    # Config
+    "pydantic==2.12.5",
+    "pydantic-settings==2.13.1",
+    # Messaging
+    "twilio==9.10.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest==9.0.2",
+    "pytest-asyncio==1.3.0",
+    "httpx==0.28.1",
+]
+
+# ── pytest ────────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "strict"
+
+# Python's warnings filter list is processed front-to-back; each new
+# warnings.filterwarnings() call inserts at the FRONT, so the LAST entry
+# in this list ends up at position 0 (highest priority).
+#
+# Ordering strategy:
+#   1. Broad error rules first (lowest priority — caught by everything below)
+#   2. Specific ignore rules last  (highest priority — override the error rules)
+filterwarnings = [
+    # Treat all deprecations in our own code as hard errors.
+    "error::DeprecationWarning",
+    "error::PendingDeprecationWarning",
+    # chromadb 1.5.6 calls asyncio.iscoroutinefunction() inside its opentelemetry
+    # decorator on class body execution.  This is deprecated in Python 3.14 and
+    # scheduled for removal in 3.16.  The bug is in third-party code; suppress it
+    # until chromadb ships an opentelemetry upgrade (track: chromadb/chroma#3800).
+    # MUST be last so it takes precedence over the error rules above.
+    "ignore:.*asyncio.iscoroutinefunction.*is deprecated:DeprecationWarning",
+]

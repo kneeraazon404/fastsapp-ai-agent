@@ -75,7 +75,7 @@ def classify_message(user_message: str) -> ClassificationResult:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=200,
+            max_completion_tokens=200,
             temperature=0.1,
             response_format={"type": "json_object"},
         )
